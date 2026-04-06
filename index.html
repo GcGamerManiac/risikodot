@@ -12,9 +12,7 @@ body {
   text-align: center;
   margin: 0;
 }
-.container {
-  padding: 20px;
-}
+.container { padding: 20px; }
 input, select, button {
   padding: 10px;
   margin: 5px;
@@ -38,13 +36,8 @@ button {
 }
 .red { background: #e74c3c; }
 .blue { background: #3498db; }
-.result {
-  margin-top: 20px;
-  font-size: 20px;
-}
-.fade {
-  animation: fadeIn 0.5s ease-in-out;
-}
+.result { margin-top: 20px; font-size: 20px; }
+.fade { animation: fadeIn 0.5s ease-in-out; }
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.8); }
   to { opacity: 1; transform: scale(1); }
@@ -55,13 +48,22 @@ button {
 <div class="container">
   <h1>🎲 Risk Dice Simulator</h1>
 
-  <div>
-    <input id="attackerName" placeholder="Nome Attaccante">
-    <input id="defenderName" placeholder="Nome Difensore">
-    <br>
-    <button onclick="setPlayers()">Conferma Giocatori</button>
+  <!-- SETUP NOMI -->
+  <div id="setup">
+    <h2>Gestione Giocatori</h2>
+    <input id="newPlayer" placeholder="Aggiungi nome">
+    <button onclick="addPlayer()">Aggiungi</button>
+
+    <div>
+      <h3>Scegli giocatori</h3>
+      <select id="attackerSelect"></select>
+      <select id="defenderSelect"></select>
+    </div>
+
+    <button onclick="setPlayers()">Inizia</button>
   </div>
 
+  <!-- GIOCO -->
   <div id="game" style="display:none;">
     <h2 id="players"></h2>
 
@@ -92,16 +94,60 @@ button {
 let attacker = "";
 let defender = "";
 
-function setPlayers() {
-  attacker = document.getElementById("attackerName").value;
-  defender = document.getElementById("defenderName").value;
+function getPlayers() {
+  return JSON.parse(localStorage.getItem("players") || "[]");
+}
 
-  if (!attacker || !defender) {
-    alert("Inserisci entrambi i nomi!");
+function savePlayers(players) {
+  localStorage.setItem("players", JSON.stringify(players));
+}
+
+function addPlayer() {
+  const input = document.getElementById("newPlayer");
+  const name = input.value.trim();
+  if (!name) return;
+
+  let players = getPlayers();
+  if (!players.includes(name)) {
+    players.push(name);
+    savePlayers(players);
+    updateSelects();
+  }
+
+  input.value = "";
+}
+
+function updateSelects() {
+  const players = getPlayers();
+  const attackerSel = document.getElementById("attackerSelect");
+  const defenderSel = document.getElementById("defenderSelect");
+
+  attackerSel.innerHTML = "";
+  defenderSel.innerHTML = "";
+
+  players.forEach(p => {
+    let opt1 = document.createElement("option");
+    opt1.value = p;
+    opt1.text = p;
+
+    let opt2 = opt1.cloneNode(true);
+
+    attackerSel.appendChild(opt1);
+    defenderSel.appendChild(opt2);
+  });
+}
+
+function setPlayers() {
+  attacker = document.getElementById("attackerSelect").value;
+  defender = document.getElementById("defenderSelect").value;
+
+  if (!attacker || !defender || attacker === defender) {
+    alert("Seleziona due giocatori diversi!");
     return;
   }
 
   document.getElementById("players").innerText = attacker + " ⚔️ vs 🛡️ " + defender;
+  document.getElementById("setup").style.display = "none";
   document.getElementById("game").style.display = "block";
 }
 
@@ -162,6 +208,9 @@ function compareDice(attacks, defenses) {
   document.getElementById("result").innerHTML =
     `${attacker} perde ${attackLoss} | ${defender} perde ${defenseLoss}`;
 }
+
+// init
+updateSelects();
 </script>
 </body>
 </html>
