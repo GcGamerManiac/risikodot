@@ -1,1 +1,167 @@
-<h1>hello world</h1>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Risk Dice Simulator</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #1e1e2f, #2c3e50);
+  color: white;
+  text-align: center;
+  margin: 0;
+}
+.container {
+  padding: 20px;
+}
+input, select, button {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 8px;
+  border: none;
+}
+button {
+  cursor: pointer;
+  background: #3498db;
+  color: white;
+  font-weight: bold;
+}
+.dice {
+  display: inline-block;
+  width: 60px;
+  height: 60px;
+  line-height: 60px;
+  font-size: 24px;
+  margin: 5px;
+  border-radius: 10px;
+}
+.red { background: #e74c3c; }
+.blue { background: #3498db; }
+.result {
+  margin-top: 20px;
+  font-size: 20px;
+}
+.fade {
+  animation: fadeIn 0.5s ease-in-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎲 Risk Dice Simulator</h1>
+
+  <div>
+    <input id="attackerName" placeholder="Nome Attaccante">
+    <input id="defenderName" placeholder="Nome Difensore">
+    <br>
+    <button onclick="setPlayers()">Conferma Giocatori</button>
+  </div>
+
+  <div id="game" style="display:none;">
+    <h2 id="players"></h2>
+
+    <div>
+      <label>Dadi Attacco:</label>
+      <select id="attackDice">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+
+      <label>Dadi Difesa:</label>
+      <select id="defenseDice">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </div>
+
+    <button onclick="rollDice()">Lancia Dadi</button>
+
+    <div id="diceArea"></div>
+    <div class="result" id="result"></div>
+  </div>
+</div>
+
+<script>
+let attacker = "";
+let defender = "";
+
+function setPlayers() {
+  attacker = document.getElementById("attackerName").value;
+  defender = document.getElementById("defenderName").value;
+
+  if (!attacker || !defender) {
+    alert("Inserisci entrambi i nomi!");
+    return;
+  }
+
+  document.getElementById("players").innerText = attacker + " ⚔️ vs 🛡️ " + defender;
+  document.getElementById("game").style.display = "block";
+}
+
+function rollDice() {
+  const attackCount = parseInt(document.getElementById("attackDice").value);
+  const defenseCount = parseInt(document.getElementById("defenseDice").value);
+
+  let attackRolls = [];
+  let defenseRolls = [];
+
+  for (let i = 0; i < attackCount; i++) {
+    attackRolls.push(Math.floor(Math.random() * 6) + 1);
+  }
+
+  for (let i = 0; i < defenseCount; i++) {
+    defenseRolls.push(Math.floor(Math.random() * 6) + 1);
+  }
+
+  attackRolls.sort((a,b)=>b-a);
+  defenseRolls.sort((a,b)=>b-a);
+
+  displayDice(attackRolls, defenseRolls);
+  compareDice(attackRolls, defenseRolls);
+}
+
+function displayDice(attacks, defenses) {
+  const area = document.getElementById("diceArea");
+  area.innerHTML = "";
+
+  attacks.forEach(v => {
+    const d = document.createElement("div");
+    d.className = "dice red fade";
+    d.innerText = v;
+    area.appendChild(d);
+  });
+
+  defenses.forEach(v => {
+    const d = document.createElement("div");
+    d.className = "dice blue fade";
+    d.innerText = v;
+    area.appendChild(d);
+  });
+}
+
+function compareDice(attacks, defenses) {
+  let rounds = Math.min(attacks.length, defenses.length);
+  let attackLoss = 0;
+  let defenseLoss = 0;
+
+  for (let i = 0; i < rounds; i++) {
+    if (attacks[i] > defenses[i]) {
+      defenseLoss++;
+    } else {
+      attackLoss++; // difesa vince in pareggio
+    }
+  }
+
+  document.getElementById("result").innerHTML =
+    `${attacker} perde ${attackLoss} | ${defender} perde ${defenseLoss}`;
+}
+</script>
+</body>
+</html>
