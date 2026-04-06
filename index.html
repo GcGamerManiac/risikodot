@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Salamina Risk Dice</title>
 <style>
-body {font-family: Arial; background: linear-gradient(135deg,#1e1e2f,#2c3e50); color:white; text-align:center; margin:0}
+body{font-family:Arial;background:linear-gradient(135deg,#1e1e2f,#2c3e50);color:white;text-align:center;margin:0}
 .container{padding:20px}
 input,select,button{padding:10px;margin:5px;border-radius:8px;border:none}
 button{cursor:pointer;background:#3498db;color:white;font-weight:bold}
@@ -14,6 +14,8 @@ button{cursor:pointer;background:#3498db;color:white;font-weight:bold}
 .result{margin-top:20px;font-size:20px}
 .fade{animation:fadeIn .5s}
 @keyframes fadeIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
+.roll{animation:roll 0.6s linear}
+@keyframes roll{0%{transform:rotate(0)}50%{transform:rotate(180deg) scale(1.2)}100%{transform:rotate(360deg)}}
 .card{margin:auto;width:260px;padding:20px;border-radius:15px;box-shadow:0 10px 20px rgba(0,0,0,.5);animation:flip .6s}
 @keyframes flip{from{transform:rotateY(90deg);opacity:0}to{transform:rotateY(0);opacity:1}}
 </style>
@@ -24,25 +26,21 @@ button{cursor:pointer;background:#3498db;color:white;font-weight:bold}
 
 <div id="setup">
 <input id="newPlayer" placeholder="Aggiungi nome">
-<button onclick="addPlayer()">Aggiungi</button>
-<br>
+<button onclick="addPlayer()">Aggiungi</button><br>
 <select id="attackerSelect"></select>
-<select id="defenderSelect"></select>
-<br>
+<select id="defenderSelect"></select><br>
 <button onclick="setPlayers()">Inizia</button>
 </div>
 
 <div id="game" style="display:none">
 <h2 id="players"></h2>
 <select id="attackDice"><option>1</option><option>2</option><option>3</option></select>
-<select id="defenseDice"><option>1</option><option>2</option><option>3</option></select>
-<br>
+<select id="defenseDice"><option>1</option><option>2</option><option>3</option></select><br>
 <button onclick="rollDice()">Lancia Dadi</button>
 <div id="diceArea"></div>
 <div id="result" class="result"></div>
 </div>
 
-<!-- CARTE -->
 <div id="cards" style="margin-top:40px; display:none;">
 <h2>🎴 Carte</h2>
 <select id="cardPlayer"></select><br>
@@ -53,83 +51,80 @@ button{cursor:pointer;background:#3498db;color:white;font-weight:bold}
 
 <script>
 let attacker="", defender="";
-
 function getPlayers(){return JSON.parse(localStorage.getItem("players")||"[]")}
 function savePlayers(p){localStorage.setItem("players",JSON.stringify(p))}
 
-function addPlayer(){
- let name=document.getElementById("newPlayer").value.trim();
- if(!name)return;
- let p=getPlayers();
- if(!p.includes(name)){p.push(name);savePlayers(p)}
- document.getElementById("newPlayer").value="";
- init();
+function addPlayer(){let n=newPlayer.value.trim();if(!n)return;let p=getPlayers();if(!p.includes(n)){p.push(n);savePlayers(p)}newPlayer.value="";init()}
+
+function init(){let p=getPlayers();[attackerSelect,defenderSelect,cardPlayer].forEach(s=>s.innerHTML="");p.forEach(x=>{[attackerSelect,defenderSelect,cardPlayer].forEach(sel=>{let o=document.createElement("option");o.value=x;o.text=x;sel.appendChild(o)})});if(p.length>0)cards.style.display="block"}
+
+function setPlayers(){attacker=attackerSelect.value;defender=defenderSelect.value;if(attacker===defender)return alert("Giocatori diversi!");players.innerText=attacker+" ⚔️ vs 🛡️ "+defender;game.style.display="block"}
+
+function rollDice(){let ac=+attackDice.value,dc=+defenseDice.value;diceArea.innerHTML="";
+let total=ac+dc;
+for(let i=0;i<total;i++){diceArea.innerHTML+=`<div class='dice roll'>🎲</div>`}
+setTimeout(()=>{
+let a=[],d=[];
+for(let i=0;i<ac;i++)a.push(Math.ceil(Math.random()*6));
+for(let i=0;i<dc;i++)d.push(Math.ceil(Math.random()*6));
+a.sort((x,y)=>y-x);d.sort((x,y)=>y-x);
+diceArea.innerHTML="";
+a.forEach(v=>diceArea.innerHTML+=`<div class='dice red fade'>${v}</div>`);
+d.forEach(v=>diceArea.innerHTML+=`<div class='dice blue fade'>${v}</div>`);
+let lossA=0,lossD=0;
+for(let i=0;i<Math.min(a.length,d.length);i++){if(a[i]>d[i])lossD++;else lossA++}
+result.innerText=`${attacker} perde ${lossA} | ${defender} perde ${lossD}`;
+},600);
 }
 
-function init(){
- let p=getPlayers();
- let a=document.getElementById("attackerSelect");
- let d=document.getElementById("defenderSelect");
- let c=document.getElementById("cardPlayer");
- a.innerHTML=d.innerHTML=c.innerHTML="";
- p.forEach(x=>{
-  [a,d,c].forEach(sel=>{
-   let o=document.createElement("option");o.value=x;o.text=x;sel.appendChild(o);
-  })
- });
- if(p.length>0) document.getElementById("cards").style.display="block";
-}
-
-function setPlayers(){
- attacker=attackerSelect.value;
- defender=defenderSelect.value;
- if(attacker===defender)return alert("Giocatori diversi!");
- players.innerText=attacker+" ⚔️ vs 🛡️ "+defender;
- game.style.display="block";
-}
-
-function rollDice(){
- let ac=+attackDice.value, dc=+defenseDice.value;
- let a=[], d=[];
- for(let i=0;i<ac;i++)a.push(Math.ceil(Math.random()*6));
- for(let i=0;i<dc;i++)d.push(Math.ceil(Math.random()*6));
- a.sort((x,y)=>y-x); d.sort((x,y)=>y-x);
- diceArea.innerHTML="";
- a.forEach(v=>diceArea.innerHTML+=`<div class='dice red fade'>${v}</div>`);
- d.forEach(v=>diceArea.innerHTML+=`<div class='dice blue fade'>${v}</div>`);
- let lossA=0, lossD=0;
- for(let i=0;i<Math.min(a.length,d.length);i++){
-  if(a[i]>d[i]) lossD++; else lossA++;
- }
- result.innerText=`${attacker} perde ${lossA} | ${defender} perde ${lossD}`;
-}
-
-// DECK NON RIPETUTI
+// TESTI COMPLETI
 let baseImprevisti=[
-"Nicola ti fotte una pedina","Pesca probabilità","Perdi 2 armate max","No carte turno","Riko -2","Gianluca -2","Sante -2","Angelo -2","MC -3","10 armate -1","Perdi carta","-1 dado","2 attacchi obbligatori","Planet -2","3 pari perdi 3"
+"Se hai casa di vanny, Nicola ti fotte una pedina",
+"Pesca una carta probabilità",
+"se hai più armate ne perdi 2 sul territorio che ne ha di più",
+"al prossimo turno non puoi usare le carte territorio",
+"se hai la casa di Riko ne perdi 2",
+"se hai casa di Gianluca me perdi 2",
+"se hai casa di Sante ne perdi 2",
+"se hai casa di Angelo ne perdi 2",
+"dopo aver mangiato al MC sei andato a cagare, se hai il MC perdi 3 armate",
+"se su un territorio hai almeno 10 armate ne perdi una ( territorio a scelta)",
+"perdi una carta territorio",
+"al prossimo attacco, usi un dado in meno, vale solo per un singolo attacco",
+"al prossimo turno devi fare almeno 2 attacchi",
+"se hai il Planet, perdi alle slot, perdi 2 armate",
+"lancia i dadi, se fai 3 numeri pari perdi 3 armate"
 ];
+
 let baseProb=[
-"Gianni +4","+10","+10","Riko +2","Angelo +2","Sante +2","Gianluca +2","Locale +2","Continente +2","Zanzara +3","Extra move","Immunità","Ruba carta","Dadi bonus","3 pari +3"
+"Se hai tutti e due i territori \"Tutto pronto da Gianni\" prendi 4 armate",
+"Prendi 10 armate",
+"Prendi 10 armate",
+"Se hai casa di Riko prendi 2 armate",
+"Se hai casa di Angelo prendi 2 armate",
+"se hai casa di Sante prendi 2 armate",
+"Se hai casa di Gianluca prendi 2 armate",
+"se hai il locale prendi 2 armate",
+"se hai almeno un continente prendi 2 armate",
+"se hai la zanzara hai un carico di sigaretta gratis, ricevi 3 armate",
+"puoi fare un altro spostamento",
+"fino al prossimo turno non puoi essere attaccato",
+"scegli a chi rubare una carta territorio",
+"lancia 3 dadi, se fai un numero maggiore uguale di 9 ne prendi uno, se fai 18 ne prendi 3.",
+"lancia i dadi, se fai 3 numeri pari prendi 3"
 ];
 
-let deckI=[], deckP=[];
-function shuffle(arr){return arr.sort(()=>Math.random()-0.5)}
-function resetDecks(){deckI=shuffle([...baseImprevisti]); deckP=shuffle([...baseProb])}
+let deckI=[],deckP=[];
+function shuffle(a){return a.sort(()=>Math.random()-0.5)}
+function resetDecks(){deckI=shuffle([...baseImprevisti]);deckP=shuffle([...baseProb])}
 
-function drawCard(type){
- let player=cardPlayer.value;
- if(!player)return;
- if(deckI.length===0||deckP.length===0) resetDecks();
- let text = type==='imprevisti'?deckI.pop():deckP.pop();
- cardArea.innerHTML=`<div class='card' style='background:${type==='imprevisti'?'#e67e22':'#2ecc71'}'>
- <h3>${type}</h3>
- <b>${player}</b>
- <p>${text}</p>
- </div>`;
-}
+function drawCard(type){let player=cardPlayer.value;if(!player)return;
+if(deckI.length===0||deckP.length===0)resetDecks();
+let text=type==='imprevisti'?deckI.pop():deckP.pop();
+cardArea.innerHTML=`<div class='card' style='background:${type==='imprevisti'?'#e67e22':'#2ecc71'}'>
+<h3>${type}</h3><b>${player}</b><p>${text}</p></div>`}
 
-resetDecks();
-init();
+resetDecks();init();
 </script>
 </div>
 </body>
