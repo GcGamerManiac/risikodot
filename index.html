@@ -2,133 +2,154 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>Salamina Risiko - Battle Lobby</title>
+    <title>Salamina Risiko Edition</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --bg: #1a1a2e; --accent: #e94560; --panel: #16213e; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; text-align: center; }
+        :root { --bg: #121216; --accent: #f39c12; --panel: #1e1e26; --text: #e0e0e0; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; overflow: hidden; }
         
-        #lobby { height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .card { background: var(--panel); padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 350px; }
+        /* Lobby */
+        #lobby { display: flex; justify-content: center; align-items: center; height: 100vh; background: #000; }
+        .card { background: var(--panel); padding: 40px; border-radius: 15px; text-align: center; border: 1px solid #333; width: 350px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #2a2a35; border: 1px solid #444; color: white; border-radius: 5px; }
         
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: none; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: var(--accent); border: none; color: white; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        /* Dado Animato */
+        .dice-anim { font-size: 80px; display: inline-block; animation: spin 0.4s infinite linear; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* Animazione Dado */
-        .dice-box { font-size: 80px; margin: 20px; display: inline-block; }
-        .rolling { animation: spin 0.4s infinite linear; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Game UI */
+        #game-ui { display: none; height: 100vh; grid-template-columns: 1fr 300px; }
+        #map { background: #2c3e50; position: relative; overflow: auto; display: flex; align-items: center; justify-content: center; }
+        .sidebar { background: var(--panel); border-left: 2px solid #000; padding: 20px; }
         
-        #game-ui { display: none; }
+        /* Territori */
+        .territory-node {
+            position: absolute; width: 100px; padding: 5px; background: rgba(0,0,0,0.8);
+            border-radius: 5px; font-size: 11px; text-align: center; cursor: pointer; border: 1px solid #555;
+        }
+        .my-turn { border: 2px solid var(--accent) !important; box-shadow: 0 0 15px var(--accent); }
     </style>
 </head>
 <body>
 
-<div id="lobby">
-    <div class="card">
-        <h1 style="color: var(--accent)">SALAMINA</h1>
-        <input type="text" id="roomInput" placeholder="ID Stanza">
-        <input type="text" id="nameInput" placeholder="Tuo Nome">
-        <button onclick="connectToServer()">ENTRA</button>
+    <div id="lobby">
+        <div class="card">
+            <h1 style="color:var(--accent)">SALAMINA RISIKO</h1>
+            <input type="text" id="roomInput" placeholder="ID Stanza">
+            <input type="text" id="nameInput" placeholder="Tuo Nome">
+            <button onclick="join()" style="width:100%; padding:12px; background:var(--accent); border:none; font-weight:bold; cursor:pointer;">ENTRA</button>
+        </div>
     </div>
-</div>
 
-<div id="game-ui">
-    <h1>Mappa di Gioco</h1>
-</div>
+    <div id="game-ui">
+        <div id="map"></div>
+        <div class="sidebar">
+            <h2 id="turn-display" style="color:var(--accent)">Attesa...</h2>
+            <div id="dice-box" style="font-size: 20px; margin: 20px 0;"></div>
+            <button onclick="endTurn()" style="width:100%; padding:10px; background:#444; color:white; border:none; cursor:pointer;">FINE TURNO</button>
+            <div style="margin-top:20px; font-size: 12px; color:#888;">
+                <h3>Territori:</h3>
+                <div id="ter-list"></div>
+            </div>
+        </div>
+    </div>
 
-<script>
-let socket;
-let currentRoom;
+    <script>
+        const socket = io("https://risikodot.onrender.com");
+        let myId, currentRoom, gameStarted = false;
 
-function connectToServer() {
-    const room = document.getElementById('roomInput').value;
-    const name = document.getElementById('nameInput').value;
+        const territoryNames = {
+            "t1": "CASA DI RIKO", "t2": "CASA DI ANGELO", "t3": "CASA DI SANTE",
+            "t4": "BADAWÏ", "t5": "CASA DI GIANLUCA", "t6": "VIA COSTA",
+            "t7": "CLUBHOUSE", "t8": "PRESEPE VIVENTE", "t9": "CORSO NAZIONALE",
+            "t10": "MUNICIPIO", "t11": "LA PUPA", "t12": "L'AGRUMETO", "t41": "JOLLY", "t42": "JOLLY"
+        };
 
-    if(!room || !name) return Swal.fire("Ehilà!", "Metti nome e stanza!", "warning");
+        function join() {
+            const room = document.getElementById('roomInput').value.trim();
+            const name = document.getElementById('nameInput').value.trim();
+            if(!room || !name) return;
+            currentRoom = room;
+            socket.emit('joinRoom', { room, name });
 
-    // FIX CORS: Aggiungiamo configurazione client
-    socket = io("https://risikodot.onrender.com", {
-        withCredentials: true,
-        transports: ["polling", "websocket"] // polling aiuta con i problemi di CORS iniziali
-    });
-
-    socket.emit('joinRoom', { room, name });
-    currentRoom = room;
-
-    // BANNER ATTESA
-    Swal.fire({
-        title: 'In attesa di sfidanti...',
-        html: 'Giocatori necessari: 2<br>Connessi: <b id="p-count">1</b>',
-        allowOutsideClick: false,
-        showConfirmButton: false,
-        didOpen: () => Swal.showLoading()
-    });
-
-    listenEvents();
-}
-
-function listenEvents() {
-    socket.on('state', (state) => {
-        const players = Object.keys(state.players);
-        const countEl = document.getElementById('p-count');
-        if(countEl) countEl.innerText = players.length;
-
-        if(players.length >= 2 && !window.rollingStarted) {
-            startInitialRoll();
-        }
-    });
-
-    socket.on('initialRollResult', (data) => {
-        // Gestione pareggio o vincitore dal server
-        if(data.tie) {
-            Swal.fire("Pareggio!", "Si ricalcia il dado per decidere chi inizia", "info").then(startInitialRoll);
-        } else {
             Swal.fire({
-                title: `Inizia ${data.winnerName}!`,
-                text: `Ha fatto ${data.roll}`,
-                icon: 'success',
-                timer: 3000
+                title: 'In attesa di avversari...',
+                html: 'Stanza: <b>'+room+'</b><br>Giocatori: <span id="sw-count">1</span>',
+                allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading()
             });
-            document.getElementById('lobby').style.display = 'none';
-            document.getElementById('game-ui').style.display = 'block';
         }
-    });
-}
 
-async function startInitialRoll() {
-    window.rollingStarted = true;
-    
-    const { isConfirmed } = await Swal.fire({
-        title: 'Pronti a combattere!',
-        text: 'Lancia il dado per decidere chi inizia la partita.',
-        confirmButtonText: 'LANCIA 🎲',
-        allowOutsideClick: false
-    });
+        socket.on('init', data => myId = data.id);
 
-    if (isConfirmed) {
-        // Mostra dado che gira
-        Swal.fire({
-            title: 'Lancio...',
-            html: '<div class="dice-box rolling">🎲</div>',
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            timer: 2000,
-            didClose: () => {
-                const myRoll = Math.floor(Math.random() * 6) + 1;
-                socket.emit('initialRoll', { room: currentRoom, roll: myRoll });
-                
-                Swal.fire({
-                    title: `Hai fatto ${myRoll}!`,
-                    text: 'Aspettiamo gli altri...',
-                    allowOutsideClick: false,
-                    showConfirmButton: false
-                });
+        socket.on('state', state => {
+            const pCount = Object.keys(state.players).length;
+            const countDisplay = document.getElementById('sw-count');
+            if(countDisplay) countDisplay.innerText = pCount;
+
+            if(pCount >= 2 && !gameStarted && Swal.isVisible()) {
+                askForRoll();
+            }
+            if(state.gameStarted) {
+                gameStarted = true;
+                updateMap(state);
+                document.getElementById('turn-display').innerText = "Turno di: " + state.turnName;
             }
         });
-    }
-}
-</script>
+
+        async function askForRoll() {
+            const { isConfirmed } = await Swal.fire({
+                title: 'Sfidanti pronti!',
+                text: 'Lancia il dado per decidere chi inizia.',
+                confirmButtonText: 'LANCIA! 🎲',
+                allowOutsideClick: false
+            });
+
+            if(isConfirmed) {
+                Swal.fire({
+                    title: 'Lancio...',
+                    html: '<div class="dice-anim">🎲</div>',
+                    allowOutsideClick: false, showConfirmButton: false, timer: 1500,
+                    didClose: () => {
+                        const roll = Math.floor(Math.random() * 6) + 1;
+                        socket.emit('initialRoll', { room: currentRoom, roll });
+                        Swal.fire({ title: 'Hai fatto ' + roll, text: 'Attendo gli altri...', showConfirmButton: false });
+                    }
+                });
+            }
+        }
+
+        socket.on('initialRollResult', data => {
+            if(data.tie) {
+                Swal.fire("Pareggio!", "Rilanciate i dadi!", "info").then(askForRoll);
+            } else {
+                Swal.fire("Inizia " + data.winnerName, "Numero: " + data.roll, "success");
+                document.getElementById('lobby').style.display = 'none';
+                document.getElementById('game-ui').style.display = 'grid';
+            }
+        });
+
+        function updateMap(state) {
+            const map = document.getElementById('map');
+            map.innerHTML = "";
+            Object.keys(state.territories).forEach((id, i) => {
+                const t = state.territories[id];
+                const div = document.createElement('div');
+                div.className = 'territory-node';
+                div.style.left = (50 + (i%7)*110) + "px";
+                div.style.top = (50 + Math.floor(i/7)*80) + "px";
+                div.style.backgroundColor = t.owner === myId ? "#27ae60" : "#c0392b";
+                div.innerHTML = `<b>${territoryNames[id] || id}</b><br>🛡️ ${t.troops}`;
+                div.onclick = () => { /* Logica Attacco qui */ };
+                map.appendChild(div);
+            });
+        }
+
+        function endTurn() { socket.emit('endTurn', { room: currentRoom }); }
+        
+        socket.on('dice', d => {
+            document.getElementById('dice-box').innerHTML = `Attacco: ${d.a.join(', ')} | Difesa: ${d.d.join(', ')}`;
+        });
+    </script>
 </body>
 </html>
