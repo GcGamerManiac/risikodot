@@ -1,120 +1,257 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Salamina Risiko Full</title>
-<script src="/socket.io/socket.io.js"></script>
-<style>
-body{font-family:Arial;background:#1e1e2f;color:white;margin:0;display:flex}
-#map{width:70%;background:#2c3e50}
-#ui{width:30%;padding:10px}
-path{stroke:#000;cursor:pointer}
-.selected{stroke:yellow;stroke-width:3}
-button{padding:10px;margin:5px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salamina Risiko Edition</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --panel-bg: #1e1e26;
+            --accent: #f39c12;
+            --text: #e0e0e0;
+            --border: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- SCHERMATA LOBBY --- */
+        #lobby-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://www.transparenttextures.com/patterns/dark-matter.png');
+        }
+
+        .lobby-card {
+            background: var(--panel-bg);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 350px;
+            border: 1px solid var(--border);
+        }
+
+        .lobby-card h1 { color: var(--accent); margin-bottom: 20px; }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+            background: #2a2a35;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            border: none;
+            color: black;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+
+        .btn-primary:hover { background: #e67e22; transform: translateY(-2px); }
+
+        /* --- INTERFACCIA GIOCO --- */
+        #game-container {
+            display: none; /* Nascosto all'inizio */
+            height: 100vh;
+            grid-template-columns: 1fr 350px;
+        }
+
+        /* Mappa */
+        #map-area {
+            background: #2c3e50;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 2px solid var(--border);
+            overflow: hidden;
+        }
+
+        svg { width: 95%; height: 95%; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); }
+
+        .territory {
+            stroke: #000;
+            stroke-width: 1.5;
+            transition: 0.2s;
+            cursor: pointer;
+            fill: #444;
+        }
+
+        .territory:hover { filter: brightness(1.2); stroke: white; }
+        .selected { stroke: #00ff00; stroke-width: 4; }
+
+        .territory-label {
+            fill: white;
+            font-size: 8px;
+            font-weight: bold;
+            pointer-events: none;
+            text-transform: uppercase;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            background: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .panel {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        h3 { margin-top: 0; color: var(--accent); font-size: 1.1em; }
+
+        .player-list { list-style: none; padding: 0; }
+        .player-item { padding: 5px 0; border-bottom: 1px solid #333; }
+
+        .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        
+        #dice-result {
+            font-size: 1.2em;
+            text-align: center;
+            padding: 10px;
+            background: #000;
+            border-radius: 5px;
+            color: #2ecc71;
+        }
+    </style>
 </head>
 <body>
 
-<div id="map">
-<svg viewBox="0 0 800 600">
-  <path id="t1" d="M10,10 L150,10 L150,100 L10,100 Z" fill="gray"/>
-  <path id="t2" d="M160,10 L300,10 L300,100 L160,100 Z" fill="gray"/>
-</svg>
-</div>
+    <div id="lobby-container">
+        <div class="lobby-card">
+            <h1>RISIKO SALAMINA</h1>
+            <input id="room" type="text" placeholder="Codice Stanza (es: 123)">
+            <input id="name" type="text" placeholder="Tuo Nome">
+            <button class="btn-primary" onclick="joinGame()">ENTRA NELLA BATTAGLIA</button>
+        </div>
+    </div>
 
-<div id="ui">
-<h2>Lobby</h2>
-<input id="room" placeholder="Codice stanza">
-<input id="name" placeholder="Nome">
-<button onclick="join()">Entra</button>
+    <div id="game-container">
+        <div id="map-area">
+            <svg viewBox="0 0 1000 800" id="game-map">
+                <g id="fasano-group">
+                    <path id="t1" class="territory" d="M50,50 L200,50 L180,150 L40,140 Z" />
+                    <text x="80" y="90" class="territory-label">CASA VANNY</text>
+                    
+                    <path id="t2" class="territory" d="M210,50 L350,60 L330,160 L190,150 Z" />
+                    <text x="220" y="100" class="territory-label">MC DONALD'S</text>
+                    </g>
 
-<h3>Giocatori</h3>
-<ul id="players"></ul>
+                <g id="savellestri-group">
+                    <path id="t11" class="territory" d="M400,20 L550,40 L530,100 L380,80 Z" />
+                    <text x="430" y="60" class="territory-label">PRATI</text>
+                </g>
 
-<h3>Turno</h3>
-<div id="turn"></div>
+                </svg>
+        </div>
 
-<h3>Azioni</h3>
-<button onclick="attack()">Attacca</button>
-<button onclick="endTurn()">Fine turno</button>
+        <div id="sidebar">
+            <div class="panel">
+                <h3>STATO PARTITA</h3>
+                <div>Turno di: <strong id="current-turn">--</strong></div>
+                <ul id="players" class="player-list"></ul>
+            </div>
 
-<h3>Dadi</h3>
-<div id="dice"></div>
+            <div class="panel">
+                <h3>COMANDI</h3>
+                <div class="actions-grid">
+                    <button class="btn-primary" onclick="attack()">ATTACCA</button>
+                    <button class="btn-primary" style="background:#3498db" onclick="endTurn()">PASSA</button>
+                </div>
+            </div>
 
-<h3>Carte</h3>
-<button onclick="drawCard('imprevisti')">Imprevisti</button>
-<button onclick="drawCard('probabilita')">Probabilità</button>
-<div id="card"></div>
-</div>
+            <div class="panel">
+                <h3>COMBATTIMENTO</h3>
+                <div id="dice-result">In attesa...</div>
+            </div>
 
-<script>
-const socket = io();
-let playerId=null, room=null;
-let selected=null, target=null;
-let state=null;
+            <div class="panel">
+                <h3>CARTE E BONUS</h3>
+                <button class="btn-primary" style="background:#9b59b6" onclick="drawCard('prob')">PESCA CARTA</button>
+                <div id="card-display" style="margin-top:10px; font-style:italic"></div>
+            </div>
+        </div>
+    </div>
 
-function join(){
-  room=document.getElementById('room').value;
-  const name=document.getElementById('name').value;
-  socket.emit('joinRoom',{room,name});
-}
+    <script>
+        const socket = io();
+        let myId = null;
 
-socket.on('init', data=>{playerId=data.id});
+        function joinGame() {
+            const room = document.getElementById('room').value;
+            const name = document.getElementById('name').value;
 
-socket.on('state', s=>{
-  state=s;
-  render();
-});
+            if(!room || !name) return alert("Inserisci dati validi!");
 
-function render(){
-  document.getElementById('players').innerHTML = Object.values(state.players)
-    .map(p=>`<li>${p.name}</li>`).join('');
+            // Transizione interfaccia
+            document.getElementById('lobby-container').style.display = 'none';
+            document.getElementById('game-container').style.display = 'grid';
 
-  document.getElementById('turn').innerText = state.turnName;
+            socket.emit('joinRoom', { room, name });
+        }
 
-  for(let t in state.territories){
-    const el=document.getElementById(t);
-    if(!el) continue;
-    el.setAttribute('fill', state.territories[t].owner===playerId?'green':'red');
-  }
-}
+        // Gestione Click Territori
+        document.querySelectorAll('.territory').forEach(path => {
+            path.addEventListener('click', function() {
+                // Rimuovi selezione precedente
+                document.querySelectorAll('.territory').forEach(p => p.classList.remove('selected'));
+                // Seleziona nuovo
+                this.classList.add('selected');
+                console.log("Selezionato:", this.id);
+            });
+        });
 
-// selezione territori
+        // Simulazione aggiornamento stato
+        socket.on('state', (state) => {
+            const playerList = document.getElementById('players');
+            playerList.innerHTML = Object.values(state.players)
+                .map(p => `<li class="player-item">● ${p.name} (${p.territoriesCount} terr.)</li>`)
+                .join('');
+            
+            document.getElementById('current-turn').innerText = state.turnName;
+        });
 
-document.querySelectorAll('path').forEach(p=>{
-  p.onclick=()=>{
-    if(!selected){selected=p.id;p.classList.add('selected');}
-    else{target=p.id;}
-  }
-});
+        function drawCard(type) {
+            const cards = ["+3 Armate in Fasano", "Attacco Bonus +1", "Sposta armate gratis", "Sabotaggio!"];
+            const randomCard = cards[Math.floor(Math.random() * cards.length)];
+            document.getElementById('card-display').innerText = "Carta: " + randomCard;
+        }
 
-function attack(){
-  if(!selected||!target)return alert('Seleziona attacco e difesa');
-  socket.emit('attack',{room,from:selected,to:target});
-}
-
-function endTurn(){
-  socket.emit('endTurn',{room});
-}
-
-// dadi lato client
-socket.on('dice', data=>{
-  document.getElementById('dice').innerText = `Attacco ${data.a} vs Difesa ${data.d}`;
-});
-
-// carte
-let imp=["Perdi 2 armate","Salti turno"];
-let prob=["+3 armate","Bonus attacco"];
-
-function drawCard(type){
-  const text = type==='imprevisti'
-    ? imp[Math.floor(Math.random()*imp.length)]
-    : prob[Math.floor(Math.random()*prob.length)];
-
-  document.getElementById('card').innerText=text;
-}
-</script>
-
+        // Funzione placeholder per attacco
+        function attack() {
+            const selected = document.querySelector('.selected');
+            if(!selected) return alert("Seleziona un territorio!");
+            // Logica socket.emit('attack', ...)
+            document.getElementById('dice-result').innerText = "🎲 Lancio in corso...";
+        }
+    </script>
 </body>
 </html>
