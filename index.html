@@ -2,150 +2,133 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Salamina Risiko Edition</title>
-    
+    <title>Salamina Risiko - Battle Lobby</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --bg: #1a1a2e; --panel: #16213e; --accent: #e94560; --text: #e0e0e0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; overflow-x: hidden; }
+        :root { --bg: #1a1a2e; --accent: #e94560; --panel: #16213e; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; text-align: center; }
         
-        /* Lobby UI */
-        #lobby { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%); }
-        .setup-card { background: var(--panel); padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; width: 320px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: none; background: #0f3460; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: var(--accent); border: none; color: white; font-weight: bold; cursor: pointer; border-radius: 5px; transition: 0.3s; }
-        button:hover { filter: brightness(1.2); }
-
-        /* Game UI (Nascosta all'inizio) */
-        #game-container { display: none; padding: 20px; }
-        .layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+        #lobby { height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .card { background: var(--panel); padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 350px; }
         
-        /* Mappa SVG */
-        #map-wrapper { background: #0f3460; border-radius: 15px; padding: 10px; border: 2px solid #444; position: relative; }
-        svg { width: 100%; height: auto; border-radius: 10px; }
-        .territory { fill: #2c3e50; stroke: #fff; stroke-width: 1; cursor: pointer; transition: 0.2s; }
-        .territory:hover { fill: #34495e; }
-        .territory.active { fill: var(--accent); }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: none; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: var(--accent); border: none; color: white; font-weight: bold; cursor: pointer; border-radius: 5px; }
 
-        .sidebar { background: var(--panel); padding: 20px; border-radius: 15px; height: 80vh; overflow-y: auto; }
-        .status-bar { display: flex; justify-content: space-between; margin-bottom: 20px; font-weight: bold; background: #0f3460; padding: 10px; border-radius: 5px; }
+        /* Animazione Dado */
+        .dice-box { font-size: 80px; margin: 20px; display: inline-block; }
+        .rolling { animation: spin 0.4s infinite linear; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        #game-ui { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="lobby">
-        <div class="setup-card">
-            <h1 style="color: var(--accent); margin-bottom: 5px;">SALAMINA</h1>
-            <p style="font-size: 0.8em; margin-bottom: 20px;">Risiko Edition</p>
-            <input type="text" id="roomName" placeholder="Nome Stanza (es. 123)">
-            <input type="text" id="playerName" placeholder="Tuo Nickname">
-            <button onclick="initConnection()">CREA / ENTRA</button>
-        </div>
+<div id="lobby">
+    <div class="card">
+        <h1 style="color: var(--accent)">SALAMINA</h1>
+        <input type="text" id="roomInput" placeholder="ID Stanza">
+        <input type="text" id="nameInput" placeholder="Tuo Nome">
+        <button onclick="connectToServer()">ENTRA</button>
     </div>
+</div>
 
-    <div id="game-container">
-        <div class="status-bar">
-            <span>Stanza: <span id="display-room">-</span></span>
-            <span>Turno: <span id="display-turn" style="color: var(--accent)">...</span></span>
-        </div>
+<div id="game-ui">
+    <h1>Mappa di Gioco</h1>
+</div>
 
-        <div class="layout">
-            <div id="map-wrapper">
-                <svg viewBox="0 0 800 600" id="game-map">
-                    </svg>
-            </div>
+<script>
+let socket;
+let currentRoom;
 
-            <div class="sidebar">
-                <h3>Territori Posseduti</h3>
-                <ul id="territory-list" style="list-style: none; padding: 0;"></ul>
-                <hr>
-                <button onclick="endTurn()" style="background: #16a085;">FINE TURNO</button>
-            </div>
-        </div>
-    </div>
+function connectToServer() {
+    const room = document.getElementById('roomInput').value;
+    const name = document.getElementById('nameInput').value;
 
-    <script>
-        // FIX BUG "io is not defined": Inizializziamo solo al click
-        let socket;
-        let currentRoom = "";
+    if(!room || !name) return Swal.fire("Ehilà!", "Metti nome e stanza!", "warning");
 
-        // Nomi estratti dal tuo file PDF 
-        const territoryNames = {
-            "t1": "CASA DI RIKO", "t2": "CASA DI ANGELO", "t3": "CASA DI SANTE",
-            "t4": "BADAWÏ", "t5": "CASA DI GIANLUCA", "t6": "VIA COSTA",
-            "t7": "CLUBHOUSE", "t8": "PRESEPE VIVENTE", "t9": "CORSO NAZIONALE",
-            "t10": "MUNICIPIO", "t11": "LA PUPA", "t12": "L'AGRUMETO",
-            "t13": "LA MANNA DEL POZZO", "t14": "CHIESA MADRE", "t15": "LIMONAIA",
-            "t16": "RODEO", "t17": "TERME", "t18": "SABBIADORO"
-            // Aggiungi qui gli altri fino a 42
-        };
+    // FIX CORS: Aggiungiamo configurazione client
+    socket = io("https://risikodot.onrender.com", {
+        withCredentials: true,
+        transports: ["polling", "websocket"] // polling aiuta con i problemi di CORS iniziali
+    });
 
-        function initConnection() {
-            const rName = document.getElementById('roomName').value;
-            const pName = document.getElementById('playerName').value;
+    socket.emit('joinRoom', { room, name });
+    currentRoom = room;
 
-            if(!rName || !pName) return alert("Inserisci tutti i dati!");
+    // BANNER ATTESA
+    Swal.fire({
+        title: 'In attesa di sfidanti...',
+        html: 'Giocatori necessari: 2<br>Connessi: <b id="p-count">1</b>',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: () => Swal.showLoading()
+    });
 
-            // Connessione al tuo backend reale (sostituisci con l'URL del tuo server se non è locale)
+    listenEvents();
+}
 
-        socket = io("https://risikodot.onrender.com");
+function listenEvents() {
+    socket.on('state', (state) => {
+        const players = Object.keys(state.players);
+        const countEl = document.getElementById('p-count');
+        if(countEl) countEl.innerText = players.length;
 
-            currentRoom = rName;
-            socket.emit('joinRoom', { room: rName, name: pName });
-
-            // Passaggio alla UI di gioco
-            document.getElementById('lobby').style.display = 'none';
-            document.getElementById('game-container').style.display = 'block';
-            document.getElementById('display-room').innerText = rName;
-
-            setupSocketListeners();
-            generateMap();
+        if(players.length >= 2 && !window.rollingStarted) {
+            startInitialRoll();
         }
+    });
 
-        function setupSocketListeners() {
-            socket.on('state', (state) => {
-                document.getElementById('display-turn').innerText = state.currentPlayer || "In attesa...";
-                updateUI(state);
+    socket.on('initialRollResult', (data) => {
+        // Gestione pareggio o vincitore dal server
+        if(data.tie) {
+            Swal.fire("Pareggio!", "Si ricalcia il dado per decidere chi inizia", "info").then(startInitialRoll);
+        } else {
+            Swal.fire({
+                title: `Inizia ${data.winnerName}!`,
+                text: `Ha fatto ${data.roll}`,
+                icon: 'success',
+                timer: 3000
             });
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'block';
         }
+    });
+}
 
-        function generateMap() {
-            const svg = document.getElementById('game-map');
-            // Generiamo 42 territori (quadrati d'esempio in griglia)
-            for (let i = 1; i <= 42; i++) {
-                const id = "t" + i;
-                const x = (i % 7) * 100 + 50;
-                const y = Math.floor(i / 7) * 80 + 50;
+async function startInitialRoll() {
+    window.rollingStarted = true;
+    
+    const { isConfirmed } = await Swal.fire({
+        title: 'Pronti a combattere!',
+        text: 'Lancia il dado per decidere chi inizia la partita.',
+        confirmButtonText: 'LANCIA 🎲',
+        allowOutsideClick: false
+    });
+
+    if (isConfirmed) {
+        // Mostra dado che gira
+        Swal.fire({
+            title: 'Lancio...',
+            html: '<div class="dice-box rolling">🎲</div>',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            timer: 2000,
+            didClose: () => {
+                const myRoll = Math.floor(Math.random() * 6) + 1;
+                socket.emit('initialRoll', { room: currentRoom, roll: myRoll });
                 
-                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                rect.setAttribute("id", id);
-                rect.setAttribute("class", "territory");
-                rect.setAttribute("x", x);
-                rect.setAttribute("y", y);
-                rect.setAttribute("width", "80");
-                rect.setAttribute("height", "60");
-                rect.setAttribute("rx", "5");
-                
-                // Evento click per attaccare/spostare
-                rect.onclick = () => alert("Hai selezionato: " + (territoryNames[id] || id));
-                
-                svg.appendChild(rect);
+                Swal.fire({
+                    title: `Hai fatto ${myRoll}!`,
+                    text: 'Aspettiamo gli altri...',
+                    allowOutsideClick: false,
+                    showConfirmButton: false
+                });
             }
-        }
-
-        function updateUI(state) {
-            const list = document.getElementById('territory-list');
-            list.innerHTML = "";
-            
-            // Logica per colorare la mappa in base al proprietario
-            // socket.on invierà lo stato dei territori...
-        }
-
-        function endTurn() {
-            socket.emit('endTurn', { room: currentRoom });
-        }
-    </script>
+        });
+    }
+}
+</script>
 </body>
 </html>
