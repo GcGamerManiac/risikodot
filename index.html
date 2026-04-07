@@ -2,154 +2,170 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>Salamina Risiko Edition</title>
+    <title>Salamina Risiko - Pro Edition</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --bg: #121216; --accent: #f39c12; --panel: #1e1e26; --text: #e0e0e0; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; overflow: hidden; }
+        :root { --bg: #121216; --accent: #f39c12; --panel: #1e1e26; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; }
         
-        /* Lobby */
-        #lobby { display: flex; justify-content: center; align-items: center; height: 100vh; background: #000; }
-        .card { background: var(--panel); padding: 40px; border-radius: 15px; text-align: center; border: 1px solid #333; width: 350px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; background: #2a2a35; border: 1px solid #444; color: white; border-radius: 5px; }
-        
-        /* Dado Animato */
-        .dice-anim { font-size: 80px; display: inline-block; animation: spin 0.4s infinite linear; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        #lobby, #setup-phase, #game-ui { display: none; padding: 20px; }
+        #lobby { display: flex; justify-content: center; align-items: center; height: 100vh; }
 
-        /* Game UI */
-        #game-ui { display: none; height: 100vh; grid-template-columns: 1fr 300px; }
-        #map { background: #2c3e50; position: relative; overflow: auto; display: flex; align-items: center; justify-content: center; }
-        .sidebar { background: var(--panel); border-left: 2px solid #000; padding: 20px; }
-        
-        /* Territori */
-        .territory-node {
-            position: absolute; width: 100px; padding: 5px; background: rgba(0,0,0,0.8);
-            border-radius: 5px; font-size: 11px; text-align: center; cursor: pointer; border: 1px solid #555;
+        /* Grafica Carte */
+        .cards-container { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; padding: 20px; }
+        .card {
+            width: 120px; height: 160px; background: white; color: black; border-radius: 8px;
+            padding: 10px; text-align: center; font-weight: bold; cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s; position: relative;
         }
-        .my-turn { border: 2px solid var(--accent) !important; box-shadow: 0 0 15px var(--accent); }
+        .card.selected { transform: translateY(-20px); box-shadow: 0 10px 20px var(--accent); border: 3px solid var(--accent); }
+        .card .troops-badge { position: absolute; bottom: 10px; right: 10px; background: var(--accent); padding: 5px; border-radius: 50%; }
+
+        .btn { padding: 10px 20px; background: var(--accent); border: none; cursor: pointer; font-weight: bold; border-radius: 5px; }
+        .btn:disabled { background: #555; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-    <div id="lobby">
-        <div class="card">
-            <h1 style="color:var(--accent)">SALAMINA RISIKO</h1>
-            <input type="text" id="roomInput" placeholder="ID Stanza">
-            <input type="text" id="nameInput" placeholder="Tuo Nome">
-            <button onclick="join()" style="width:100%; padding:12px; background:var(--accent); border:none; font-weight:bold; cursor:pointer;">ENTRA</button>
-        </div>
+<div id="lobby">
+    <div style="text-align:center">
+        <h1>SALAMINA RISIKO</h1>
+        <input type="text" id="roomInput" placeholder="ID Stanza" style="padding:10px"><br><br>
+        <input type="text" id="nameInput" placeholder="Tuo Nome" style="padding:10px"><br><br>
+        <button class="btn" onclick="join()">ENTRA NELLA STANZA</button>
+        <p id="player-list"></p>
+        <button id="startBtn" class="btn" style="display:none" onclick="requestStart()">INIZIA DISTRIBUZIONE</button>
     </div>
+</div>
 
-    <div id="game-ui">
-        <div id="map"></div>
-        <div class="sidebar">
-            <h2 id="turn-display" style="color:var(--accent)">Attesa...</h2>
-            <div id="dice-box" style="font-size: 20px; margin: 20px 0;"></div>
-            <button onclick="endTurn()" style="width:100%; padding:10px; background:#444; color:white; border:none; cursor:pointer;">FINE TURNO</button>
-            <div style="margin-top:20px; font-size: 12px; color:#888;">
-                <h3>Territori:</h3>
-                <div id="ter-list"></div>
-            </div>
-        </div>
+<div id="setup-phase">
+    <h2>Fase di Posizionamento</h2>
+    <p>Distribuisci le tue 30 truppe. Ogni territorio deve avere almeno 1 truppa.</p>
+    <div style="background: var(--panel); padding: 10px; border-radius: 10px;">
+        Truppe rimanenti: <b id="troops-count">30</b>
     </div>
+    <div class="cards-container" id="my-cards"></div>
+    <button class="btn" onclick="confirmSetup()">CONFERMA POSIZIONAMENTO</button>
+</div>
 
-    <script>
-        const socket = io("https://risikodot.onrender.com");
-        let myId, currentRoom, gameStarted = false;
+<div id="game-ui">
+    <h2 id="turn-info"></h2>
+    <div id="board" class="cards-container"></div>
+    <button id="endTurnBtn" class="btn" onclick="endTurn()">FINE TURNO</button>
+</div>
 
-        const territoryNames = {
-            "t1": "CASA DI RIKO", "t2": "CASA DI ANGELO", "t3": "CASA DI SANTE",
-            "t4": "BADAWÏ", "t5": "CASA DI GIANLUCA", "t6": "VIA COSTA",
-            "t7": "CLUBHOUSE", "t8": "PRESEPE VIVENTE", "t9": "CORSO NAZIONALE",
-            "t10": "MUNICIPIO", "t11": "LA PUPA", "t12": "L'AGRUMETO", "t41": "JOLLY", "t42": "JOLLY"
-        };
+<script>
+const socket = io("https://risikodot.onrender.com");
+let myId, currentRoom, myPlacements = {}, totalTroops = 30;
 
-        function join() {
-            const room = document.getElementById('roomInput').value.trim();
-            const name = document.getElementById('nameInput').value.trim();
-            if(!room || !name) return;
-            currentRoom = room;
-            socket.emit('joinRoom', { room, name });
+function join() {
+    const room = document.getElementById('roomInput').value;
+    const name = document.getElementById('nameInput').value;
+    currentRoom = room;
+    socket.emit('joinRoom', { room, name });
+}
 
-            Swal.fire({
-                title: 'In attesa di avversari...',
-                html: 'Stanza: <b>'+room+'</b><br>Giocatori: <span id="sw-count">1</span>',
-                allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading()
-            });
+function requestStart() {
+    socket.emit('startGameRequest', currentRoom);
+}
+
+socket.on('init', data => myId = data.id);
+
+socket.on('state', state => {
+    if (state.phase === 'LOBBY') {
+        document.getElementById('lobby').style.display = 'flex';
+        const players = Object.values(state.players);
+        document.getElementById('player-list').innerText = "Giocatori: " + players.map(p => p.name).join(', ');
+        if (players.length >= 2) document.getElementById('startBtn').style.display = 'inline-block';
+    } 
+    else if (state.phase === 'SETUP') {
+        document.getElementById('lobby').style.display = 'none';
+        document.getElementById('setup-phase').style.display = 'block';
+        renderSetup(state.territories);
+    }
+    else if (state.phase === 'PLAY') {
+        document.getElementById('setup-phase').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block';
+        renderPlay(state);
+    }
+});
+
+function renderSetup(territories) {
+    const container = document.getElementById('my-cards');
+    container.innerHTML = "";
+    
+    Object.entries(territories).forEach(([name, data]) => {
+        if (data.owner === myId) {
+            if (!myPlacements[name]) myPlacements[name] = 1; // Minimo 1
+            
+            const card = document.createElement('div');
+            card.className = "card" + (window.selectedCard === name ? " selected" : "");
+            card.innerHTML = `${name}<div class="troops-badge">${myPlacements[name]}</div>`;
+            
+            card.onclick = () => {
+                window.selectedCard = name;
+                renderSetup(territories);
+                openTroopMenu(name);
+            };
+            container.appendChild(card);
         }
+    });
+    updateTroopCount();
+}
 
-        socket.on('init', data => myId = data.id);
+async function openTroopMenu(name) {
+    const { value: num } = await Swal.fire({
+        title: `Truppe su ${name}`,
+        input: 'number',
+        inputLabel: `Hai usato ${30 - totalTroops}/30 truppe`,
+        inputValue: myPlacements[name],
+        showCancelButton: true
+    });
 
-        socket.on('state', state => {
-            const pCount = Object.keys(state.players).length;
-            const countDisplay = document.getElementById('sw-count');
-            if(countDisplay) countDisplay.innerText = pCount;
-
-            if(pCount >= 2 && !gameStarted && Swal.isVisible()) {
-                askForRoll();
-            }
-            if(state.gameStarted) {
-                gameStarted = true;
-                updateMap(state);
-                document.getElementById('turn-display').innerText = "Turno di: " + state.turnName;
-            }
-        });
-
-        async function askForRoll() {
-            const { isConfirmed } = await Swal.fire({
-                title: 'Sfidanti pronti!',
-                text: 'Lancia il dado per decidere chi inizia.',
-                confirmButtonText: 'LANCIA! 🎲',
-                allowOutsideClick: false
-            });
-
-            if(isConfirmed) {
-                Swal.fire({
-                    title: 'Lancio...',
-                    html: '<div class="dice-anim">🎲</div>',
-                    allowOutsideClick: false, showConfirmButton: false, timer: 1500,
-                    didClose: () => {
-                        const roll = Math.floor(Math.random() * 6) + 1;
-                        socket.emit('initialRoll', { room: currentRoom, roll });
-                        Swal.fire({ title: 'Hai fatto ' + roll, text: 'Attendo gli altri...', showConfirmButton: false });
-                    }
-                });
-            }
+    if (num) {
+        const diff = parseInt(num) - myPlacements[name];
+        if (totalTroops - diff >= 0 && parseInt(num) >= 1) {
+            myPlacements[name] = parseInt(num);
+            totalTroops -= diff;
+            renderSetup(window.lastStateTerritories || {});
+        } else {
+            Swal.fire("Errore", "Truppe insufficienti o numero non valido (minimo 1)!", "error");
         }
+    }
+}
 
-        socket.on('initialRollResult', data => {
-            if(data.tie) {
-                Swal.fire("Pareggio!", "Rilanciate i dadi!", "info").then(askForRoll);
-            } else {
-                Swal.fire("Inizia " + data.winnerName, "Numero: " + data.roll, "success");
-                document.getElementById('lobby').style.display = 'none';
-                document.getElementById('game-ui').style.display = 'grid';
-            }
-        });
+function confirmSetup() {
+    if (totalTroops > 0) {
+        return Swal.fire("Attenzione", `Devi ancora posizionare ${totalTroops} truppe!`, "warning");
+    }
+    socket.emit('confirmSetup', { room: currentRoom, placements: myPlacements });
+    Swal.fire("Pronto!", "In attesa degli altri giocatori...", "success");
+}
 
-        function updateMap(state) {
-            const map = document.getElementById('map');
-            map.innerHTML = "";
-            Object.keys(state.territories).forEach((id, i) => {
-                const t = state.territories[id];
-                const div = document.createElement('div');
-                div.className = 'territory-node';
-                div.style.left = (50 + (i%7)*110) + "px";
-                div.style.top = (50 + Math.floor(i/7)*80) + "px";
-                div.style.backgroundColor = t.owner === myId ? "#27ae60" : "#c0392b";
-                div.innerHTML = `<b>${territoryNames[id] || id}</b><br>🛡️ ${t.troops}`;
-                div.onclick = () => { /* Logica Attacco qui */ };
-                map.appendChild(div);
-            });
-        }
+function renderPlay(state) {
+    const isMyTurn = state.order[state.turnIndex] === myId;
+    document.getElementById('turn-info').innerText = isMyTurn ? "È IL TUO TURNO!" : `Turno di: ${state.players[state.order[state.turnIndex]].name}`;
+    document.getElementById('endTurnBtn').disabled = !isMyTurn;
 
-        function endTurn() { socket.emit('endTurn', { room: currentRoom }); }
-        
-        socket.on('dice', d => {
-            document.getElementById('dice-box').innerHTML = `Attacco: ${d.a.join(', ')} | Difesa: ${d.d.join(', ')}`;
-        });
-    </script>
+    const board = document.getElementById('board');
+    board.innerHTML = "";
+    Object.entries(state.territories).forEach(([name, data]) => {
+        const card = document.createElement('div');
+        card.className = "card";
+        card.style.background = data.owner === myId ? "#27ae60" : "#c0392b";
+        card.innerHTML = `${name}<br>🪖 ${data.troops}`;
+        board.appendChild(card);
+    });
+}
+
+function endTurn() {
+    socket.emit('endTurn', { room: currentRoom });
+}
+
+function updateTroopCount() {
+    document.getElementById('troops-count').innerText = totalTroops;
+}
+</script>
 </body>
 </html>
