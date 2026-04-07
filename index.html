@@ -3,129 +3,184 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Salamina Risk Dice</title>
+<title>Salamina Risiko Full</title>
+<script src="/socket.io/socket.io.js"></script>
 <style>
-body{font-family:Arial;background:linear-gradient(135deg,#1e1e2f,#2c3e50);color:white;text-align:center;margin:0}
-.container{padding:20px}
-input,select,button{padding:10px;margin:5px;border-radius:8px;border:none}
-button{cursor:pointer;background:#3498db;color:white;font-weight:bold}
-.dice{display:inline-block;width:60px;height:60px;line-height:60px;font-size:24px;margin:5px;border-radius:10px}
-.red{background:#e74c3c}.blue{background:#3498db}
-.result{margin-top:20px;font-size:20px}
-.fade{animation:fadeIn .5s}
-@keyframes fadeIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
-.roll{animation:roll 0.6s linear}
-@keyframes roll{0%{transform:rotate(0)}50%{transform:rotate(180deg) scale(1.2)}100%{transform:rotate(360deg)}}
-.card{margin:auto;width:260px;padding:20px;border-radius:15px;box-shadow:0 10px 20px rgba(0,0,0,.5);animation:flip .6s}
-@keyframes flip{from{transform:rotateY(90deg);opacity:0}to{transform:rotateY(0);opacity:1}}
+body{font-family:Arial;background:#1e1e2f;color:white;margin:0;display:flex}
+#map{width:70%;background:#2c3e50}
+#ui{width:30%;padding:10px}
+path{stroke:#000;cursor:pointer}
+.selected{stroke:yellow;stroke-width:3}
+button{padding:10px;margin:5px}
 </style>
 </head>
 <body>
-<div class="container">
-<h1>🎲 Salamina Risk Dice</h1>
 
-<div id="setup">
-<input id="newPlayer" placeholder="Aggiungi nome">
-<button onclick="addPlayer()">Aggiungi</button><br>
-<select id="attackerSelect"></select>
-<select id="defenderSelect"></select><br>
-<button onclick="setPlayers()">Inizia</button>
+<div id="map">
+<svg viewBox="0 0 800 600">
+  <path id="t1" d="M10,10 L150,10 L150,100 L10,100 Z" fill="gray"/>
+  <path id="t2" d="M160,10 L300,10 L300,100 L160,100 Z" fill="gray"/>
+</svg>
 </div>
 
-<div id="game" style="display:none">
-<h2 id="players"></h2>
-<select id="attackDice"><option>1</option><option>2</option><option>3</option></select>
-<select id="defenseDice"><option>1</option><option>2</option><option>3</option></select><br>
-<button onclick="rollDice()">Lancia Dadi</button>
-<div id="diceArea"></div>
-<div id="result" class="result"></div>
-</div>
+<div id="ui">
+<h2>Lobby</h2>
+<input id="room" placeholder="Codice stanza">
+<input id="name" placeholder="Nome">
+<button onclick="join()">Entra</button>
 
-<div id="cards" style="margin-top:40px; display:none;">
-<h2>🎴 Carte</h2>
-<select id="cardPlayer"></select><br>
+<h3>Giocatori</h3>
+<ul id="players"></ul>
+
+<h3>Turno</h3>
+<div id="turn"></div>
+
+<h3>Azioni</h3>
+<button onclick="attack()">Attacca</button>
+<button onclick="endTurn()">Fine turno</button>
+
+<h3>Dadi</h3>
+<div id="dice"></div>
+
+<h3>Carte</h3>
 <button onclick="drawCard('imprevisti')">Imprevisti</button>
 <button onclick="drawCard('probabilita')">Probabilità</button>
-<div id="cardArea"></div>
+<div id="card"></div>
 </div>
 
 <script>
-let attacker="", defender="";
-function getPlayers(){return JSON.parse(localStorage.getItem("players")||"[]")}
-function savePlayers(p){localStorage.setItem("players",JSON.stringify(p))}
+const socket = io();
+let playerId=null, room=null;
+let selected=null, target=null;
+let state=null;
 
-function addPlayer(){let n=newPlayer.value.trim();if(!n)return;let p=getPlayers();if(!p.includes(n)){p.push(n);savePlayers(p)}newPlayer.value="";init()}
-
-function init(){let p=getPlayers();[attackerSelect,defenderSelect,cardPlayer].forEach(s=>s.innerHTML="");p.forEach(x=>{[attackerSelect,defenderSelect,cardPlayer].forEach(sel=>{let o=document.createElement("option");o.value=x;o.text=x;sel.appendChild(o)})});if(p.length>0)cards.style.display="block"}
-
-function setPlayers(){attacker=attackerSelect.value;defender=defenderSelect.value;if(attacker===defender)return alert("Giocatori diversi!");players.innerText=attacker+" ⚔️ vs 🛡️ "+defender;game.style.display="block"}
-
-function rollDice(){let ac=+attackDice.value,dc=+defenseDice.value;diceArea.innerHTML="";
-let total=ac+dc;
-for(let i=0;i<total;i++){diceArea.innerHTML+=`<div class='dice roll'>🎲</div>`}
-setTimeout(()=>{
-let a=[],d=[];
-for(let i=0;i<ac;i++)a.push(Math.ceil(Math.random()*6));
-for(let i=0;i<dc;i++)d.push(Math.ceil(Math.random()*6));
-a.sort((x,y)=>y-x);d.sort((x,y)=>y-x);
-diceArea.innerHTML="";
-a.forEach(v=>diceArea.innerHTML+=`<div class='dice red fade'>${v}</div>`);
-d.forEach(v=>diceArea.innerHTML+=`<div class='dice blue fade'>${v}</div>`);
-let lossA=0,lossD=0;
-for(let i=0;i<Math.min(a.length,d.length);i++){if(a[i]>d[i])lossD++;else lossA++}
-result.innerText=`${attacker} perde ${lossA} | ${defender} perde ${lossD}`;
-},600);
+function join(){
+  room=document.getElementById('room').value;
+  const name=document.getElementById('name').value;
+  socket.emit('joinRoom',{room,name});
 }
 
-// TESTI COMPLETI
-let baseImprevisti=[
-"Se hai casa di vanny, Nicola ti fotte una pedina",
-"Pesca una carta probabilità",
-"se hai più armate ne perdi 2 sul territorio che ne ha di più",
-"al prossimo turno non puoi usare le carte territorio",
-"se hai la casa di Riko ne perdi 2",
-"se hai casa di Gianluca me perdi 2",
-"se hai casa di Sante ne perdi 2",
-"se hai casa di Angelo ne perdi 2",
-"dopo aver mangiato al MC sei andato a cagare, se hai il MC perdi 3 armate",
-"se su un territorio hai almeno 10 armate ne perdi una ( territorio a scelta)",
-"perdi una carta territorio",
-"al prossimo attacco, usi un dado in meno, vale solo per un singolo attacco",
-"al prossimo turno devi fare almeno 2 attacchi",
-"se hai il Planet, perdi alle slot, perdi 2 armate",
-"lancia i dadi, se fai 3 numeri pari perdi 3 armate"
-];
+socket.on('init', data=>{playerId=data.id});
 
-let baseProb=[
-"Se hai tutti e due i territori \"Tutto pronto da Gianni\" prendi 4 armate",
-"Prendi 10 armate",
-"Prendi 10 armate",
-"Se hai casa di Riko prendi 2 armate",
-"Se hai casa di Angelo prendi 2 armate",
-"se hai casa di Sante prendi 2 armate",
-"Se hai casa di Gianluca prendi 2 armate",
-"se hai il locale prendi 2 armate",
-"se hai almeno un continente prendi 2 armate",
-"se hai la zanzara hai un carico di sigaretta gratis, ricevi 3 armate",
-"puoi fare un altro spostamento",
-"fino al prossimo turno non puoi essere attaccato",
-"scegli a chi rubare una carta territorio",
-"lancia 3 dadi, se fai un numero maggiore uguale di 9 ne prendi uno, se fai 18 ne prendi 3.",
-"lancia i dadi, se fai 3 numeri pari prendi 3"
-];
+socket.on('state', s=>{
+  state=s;
+  render();
+});
 
-let deckI=[],deckP=[];
-function shuffle(a){return a.sort(()=>Math.random()-0.5)}
-function resetDecks(){deckI=shuffle([...baseImprevisti]);deckP=shuffle([...baseProb])}
+function render(){
+  document.getElementById('players').innerHTML = Object.values(state.players)
+    .map(p=>`<li>${p.name}</li>`).join('');
 
-function drawCard(type){let player=cardPlayer.value;if(!player)return;
-if(deckI.length===0||deckP.length===0)resetDecks();
-let text=type==='imprevisti'?deckI.pop():deckP.pop();
-cardArea.innerHTML=`<div class='card' style='background:${type==='imprevisti'?'#e67e22':'#2ecc71'}'>
-<h3>${type}</h3><b>${player}</b><p>${text}</p></div>`}
+  document.getElementById('turn').innerText = state.turnName;
 
-resetDecks();init();
+  for(let t in state.territories){
+    const el=document.getElementById(t);
+    if(!el) continue;
+    el.setAttribute('fill', state.territories[t].owner===playerId?'green':'red');
+  }
+}
+
+// selezione territori
+
+document.querySelectorAll('path').forEach(p=>{
+  p.onclick=()=>{
+    if(!selected){selected=p.id;p.classList.add('selected');}
+    else{target=p.id;}
+  }
+});
+
+function attack(){
+  if(!selected||!target)return alert('Seleziona attacco e difesa');
+  socket.emit('attack',{room,from:selected,to:target});
+}
+
+function endTurn(){
+  socket.emit('endTurn',{room});
+}
+
+// dadi lato client
+socket.on('dice', data=>{
+  document.getElementById('dice').innerText = `Attacco ${data.a} vs Difesa ${data.d}`;
+});
+
+// carte
+let imp=["Perdi 2 armate","Salti turno"];
+let prob=["+3 armate","Bonus attacco"];
+
+function drawCard(type){
+  const text = type==='imprevisti'
+    ? imp[Math.floor(Math.random()*imp.length)]
+    : prob[Math.floor(Math.random()*prob.length)];
+
+  document.getElementById('card').innerText=text;
+}
 </script>
-</div>
+
 </body>
 </html>
+
+// ================= SERVER NODE =================
+
+/*
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static('public'));
+
+let rooms={};
+
+io.on('connection', socket=>{
+
+  socket.emit('init',{id:socket.id});
+
+  socket.on('joinRoom', ({room,name})=>{
+    socket.join(room);
+
+    if(!rooms[room]){
+      rooms[room]={
+        players:{},
+        territories:{ t1:{owner:null,troops:3}, t2:{owner:null,troops:3} },
+        turn:0
+      }
+    }
+
+    rooms[room].players[socket.id]={name};
+
+    update(room);
+
+    socket.on('attack',({room,from,to})=>{
+      let a=Math.ceil(Math.random()*6);
+      let d=Math.ceil(Math.random()*6);
+
+      io.to(room).emit('dice',{a,d});
+
+      if(a>d){
+        rooms[room].territories[to].owner=socket.id;
+      }
+
+      update(room);
+    });
+
+    socket.on('endTurn',({room})=>{
+      rooms[room].turn=(rooms[room].turn+1)%Object.keys(rooms[room].players).length;
+      update(room);
+    });
+
+  });
+
+});
+
+function update(room){
+  const r=rooms[room];
+  const ids=Object.keys(r.players);
+  r.turnName = ids[r.turn] ? r.players[ids[r.turn]].name : '';
+  io.to(room).emit('state',r);
+}
+
+server.listen(3000,()=>console.log('RUN'));
+*/
