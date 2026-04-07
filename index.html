@@ -89,7 +89,8 @@
             if(!rName || !pName) return alert("Inserisci tutti i dati!");
 
             // Connessione al tuo backend reale (sostituisci con l'URL del tuo server se non è locale)
-            socket = io("https://il-tuo-server-backend.com"); 
+
+        socket = io("https://risikodot.onrender.com");
 
             currentRoom = rName;
             socket.emit('joinRoom', { room: rName, name: pName });
