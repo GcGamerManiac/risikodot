@@ -10,19 +10,18 @@
         :root { --bg: #0a0a0c; --panel: #16161e; --accent: #f39c12; --danger: #e74c3c; --success: #2ecc71; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; overflow-x: hidden; }
 
-        /* Background Map Styling */
+        /* Mappa in background con effetto rilievo */
         #map-container {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             z-index: -1; opacity: 0.4; display: flex; align-items: center; justify-content: center;
         }
         #map-container svg { width: 90%; height: 90%; }
         #map-container svg path, #map-container svg polygon { 
-            fill: #222; stroke: #444; stroke-width: 1; transition: all 0.3s; 
+            fill: #222; stroke: #444; stroke-width: 1; transition: all 0.3s ease; 
         }
-        /* Classe Rilievo */
         .highlight-path { 
-            fill: var(--accent) !important; filter: drop-shadow(0 0 8px var(--accent)); 
-            stroke: white !important; stroke-width: 2px !important;
+            fill: var(--accent) !important; filter: drop-shadow(0 0 12px var(--accent)); 
+            stroke: white !important; stroke-width: 2px !important; transform: translateY(-2px);
         }
 
         #lobby { display: flex; justify-content: center; align-items: center; height: 100vh; }
@@ -30,19 +29,19 @@
 
         .cards-container { 
             display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
-            gap: 15px; padding: 20px; background: rgba(0,0,0,0.5); border-radius: 20px;
+            gap: 15px; padding: 20px; background: rgba(0,0,0,0.6); border-radius: 20px; border: 1px solid #333;
         }
         
         .card {
-            width: 140px; height: 200px; border-radius: 10px; background-size: cover;
-            position: relative; cursor: pointer; border: 2px solid #444; transition: 0.3s;
+            width: 140px; height: 200px; border-radius: 10px; background-size: cover; background-position: center;
+            position: relative; cursor: pointer; border: 2px solid #444; transition: 0.3s; background-color: #222;
         }
-        .card:hover { transform: scale(1.05); border-color: var(--accent); }
-        .card-overlay { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8); padding: 5px; font-size: 11px; text-align: center; }
-        .troops-badge { position: absolute; top: -10px; right: -10px; background: var(--accent); color: black; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; }
+        .card:hover { transform: translateY(-10px); border-color: var(--accent); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .card-overlay { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.85); padding: 5px 0; font-size: 10px; text-align: center; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+        .troops-badge { position: absolute; top: -10px; right: -10px; background: var(--accent); color: black; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; z-index: 10; }
 
-        .btn { padding: 12px 25px; background: var(--accent); border: none; font-weight: bold; border-radius: 8px; cursor: pointer; color: black; }
-        .setup-header { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 15px; border-radius: 15px; margin-bottom: 20px; }
+        .btn { padding: 12px 25px; background: var(--accent); border: none; font-weight: bold; border-radius: 8px; cursor: pointer; color: black; text-transform: uppercase; }
+        .setup-header { display: flex; justify-content: space-between; align-items: center; background: var(--panel); padding: 15px 25px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #333; }
     </style>
 </head>
 <body>
@@ -51,12 +50,12 @@
         </div>
 
     <div id="lobby">
-        <div style="text-align:center; background: var(--panel); padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <h1>SALAMINA RISIKO</h1>
-            <input type="text" id="roomInput" placeholder="ID Stanza" style="padding:10px; margin-bottom:10px;"><br>
-            <input type="text" id="nameInput" placeholder="Tuo Nome" style="padding:10px; margin-bottom:10px;"><br>
+        <div style="text-align:center; background: var(--panel); padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
+            <h1 style="color:var(--accent); letter-spacing: 2px;">SALAMINA RISIKO</h1>
+            <input type="text" id="roomInput" placeholder="ID Stanza" style="padding:12px; margin-bottom:10px; border-radius:5px; border:none; width:250px;"><br>
+            <input type="text" id="nameInput" placeholder="Tuo Nome" style="padding:12px; margin-bottom:10px; border-radius:5px; border:none; width:250px;"><br>
             <button class="btn" onclick="join()">ENTRA IN GUERRA</button>
-            <div id="status" style="margin-top:20px"></div>
+            <div id="status" style="margin-top:20px; font-style: italic; color: #888;"></div>
             <button id="startBtn" class="btn" style="display:none; margin-top:20px" onclick="requestStart()">INIZIA PARTITA</button>
         </div>
     </div>
@@ -64,17 +63,17 @@
     <div id="setup-phase">
         <div class="setup-header">
             <div>
-                <h2>Fase di Rinforzo</h2>
-                <p>Truppe rimaste da piazzare: <b id="troops-count" style="color:var(--accent); font-size: 1.5em;">-</b></p>
+                <h2 style="margin:0">Posizionamento Truppe</h2>
+                <p style="margin:5px 0 0 0">Totale schierato: <b id="troops-total" style="color:var(--accent); font-size: 1.4em;">0</b> / 30</p>
             </div>
-            <button class="btn" onclick="confirmSetup()">CONFERMA SCHIERAMENTO</button>
+            <button class="btn" onclick="confirmSetup()">CONFERMA E AVVIA</button>
         </div>
         <div class="cards-container" id="my-cards-setup"></div>
     </div>
 
     <div id="game-ui">
         <div class="setup-header">
-            <h2 id="turn-info">Caricamento...</h2>
+            <h2 id="turn-info" style="margin:0">Caricamento...</h2>
             <button id="endTurnBtn" class="btn" onclick="endTurn()" style="display:none">PASSA TURNO</button>
         </div>
         <div class="cards-container" id="game-board"></div>
@@ -82,9 +81,28 @@
 
     <script>
         const socket = io("https://risikodot.onrender.com");
-        let myId, currentRoom, myPlacements = {}, totalAvailable = 30;
+        let myId, currentRoom, myPlacements = {};
+        const MAX_TROOPS = 30;
 
-        // Sync card hover con la mappa SVG
+        const TERRITORY_LIST = [
+            "CASA DI RIKO", "CASA DI ANGELO", "CASA DI SANTE", "BADAWÏ", "CASA DI GIANLUCA",
+            "VIA COSTA", "CLUBHOUSE", "PRESEPE VIVENTE", "CORSO NAZIONALE", "MUNICIPIO",
+            "LA PUPA", "L'AGRUMETO", "LA MANNA DEL POZZO", "CHIESA MADRE", "LIMONAIA",
+            "RODEO", "TERME", "SABBIADORO", "LIDO VERDE", "MONT'ALBANO", "SPEZIALE",
+            "TORRE CANNE", "POZZO FACETO", "SAVELLETRI", "EGNAZIA", "FORCAT Ella",
+            "COCCARO", "MASSERIA TORRE COCCARO", "MASSERIA SAN DOMENICO", "PETTOLECCHIA",
+            "ZOO SAFARI", "SELVA DI FASANO", "LAURETO", "CANALE DI PIRRO", "COREGGIA",
+            "GORGOfreddo", "L'ASSUNTA", "CAPITOLO", "SANTO STEFANO", "MONOPOLI",
+            "POLIGNANO", "CASTELLANA"
+        ];
+
+        // Ripristinato sistema nomi immagini: NomeCartella/NomeFile-Numero.png
+        function getImg(name) {
+            const idx = TERRITORY_LIST.indexOf(name) + 1;
+            const folder = "CARTA territori e jolly";
+            return encodeURI(`${folder}/CARTA territori e jolly-${idx}.png`);
+        }
+
         function highlightMap(name, active) {
             const svgId = name.replace(/\s+/g, '_');
             const el = document.getElementById(svgId);
@@ -93,7 +111,9 @@
 
         function join() {
             currentRoom = document.getElementById('roomInput').value;
-            socket.emit('joinRoom', { room: currentRoom, name: document.getElementById('nameInput').value });
+            const name = document.getElementById('nameInput').value;
+            if(!currentRoom || !name) return Swal.fire("Ehi!", "Inserisci stanza e nome", "warning");
+            socket.emit('joinRoom', { room: currentRoom, name: name });
         }
 
         function requestStart() { socket.emit('startGameRequest', currentRoom); }
@@ -102,7 +122,7 @@
 
         socket.on('state', state => {
             if (state.phase === 'LOBBY') {
-                document.getElementById('status').innerText = `Giocatori connessi: ${Object.keys(state.players).length}`;
+                document.getElementById('status').innerText = `Giocatori in attesa: ${Object.keys(state.players).length}`;
                 if (Object.keys(state.players).length >= 2) document.getElementById('startBtn').style.display = 'inline-block';
             } else if (state.phase === 'SETUP') {
                 document.getElementById('lobby').style.display = 'none';
@@ -119,20 +139,22 @@
             const container = document.getElementById('my-cards-setup');
             container.innerHTML = "";
             
-            // Inizializza 1 truppa per territorio se vuoto
+            // Inizializzazione: se è la prima volta, metti 1 truppa per ogni territorio posseduto
             Object.entries(territories).forEach(([name, data]) => {
-                if (data.owner === myId && !myPlacements[name]) myPlacements[name] = 1;
+                if (data.owner === myId && !myPlacements[name]) {
+                    myPlacements[name] = 1;
+                }
             });
 
-            const used = Object.values(myPlacements).reduce((a, b) => a + b, 0);
-            const remaining = totalAvailable - used;
-            document.getElementById('troops-count').innerText = remaining;
+            const currentTotal = Object.values(myPlacements).reduce((a, b) => a + b, 0);
+            document.getElementById('troops-total').innerText = currentTotal;
+            document.getElementById('troops-total').style.color = currentTotal === MAX_TROOPS ? "var(--success)" : "var(--accent)";
 
             Object.entries(territories).forEach(([name, data]) => {
                 if (data.owner === myId) {
                     const card = document.createElement('div');
                     card.className = "card";
-                    card.style.backgroundImage = `url('CARTA territori e jolly/${name}.png')`; // Nota: Assicurati che i nomi file combacino
+                    card.style.backgroundImage = `url('${getImg(name)}')`;
                     card.innerHTML = `<div class="troops-badge">${myPlacements[name]}</div><div class="card-overlay">${name}</div>`;
                     
                     card.onmouseenter = () => highlightMap(name, true);
@@ -141,20 +163,26 @@
                     card.onclick = async () => {
                         const { value: num } = await Swal.fire({
                             title: name,
-                            text: `Quante truppe? (Disponibili: ${remaining + myPlacements[name]})`,
+                            text: "Quanti carri armati vuoi schierare qui?",
                             input: 'number',
                             inputValue: myPlacements[name],
-                            inputAttributes: { min: 1, max: 30 }
+                            inputAttributes: { min: 1, max: MAX_TROOPS },
+                            showCancelButton: true
                         });
 
                         if (num) {
                             const val = parseInt(num);
-                            const diff = val - myPlacements[name];
-                            if (val >= 1 && (remaining - diff) >= 0) {
+                            const tempPlacements = {...myPlacements};
+                            tempPlacements[name] = val;
+                            const tempTotal = Object.values(tempPlacements).reduce((a, b) => a + b, 0);
+
+                            if (val < 1) {
+                                Swal.fire("Errore", "Devi mettere almeno 1 carro armato!", "error");
+                            } else if (tempTotal > MAX_TROOPS) {
+                                Swal.fire("Troppi!", `Così arriveresti a ${tempTotal}. Il massimo è 30!`, "error");
+                            } else {
                                 myPlacements[name] = val;
                                 renderSetup(territories);
-                            } else {
-                                Swal.fire("Errore", "Numero truppe non valido o insufficienti!", "error");
                             }
                         }
                     };
@@ -164,28 +192,35 @@
         }
 
         function confirmSetup() {
-            const used = Object.values(myPlacements).reduce((a, b) => a + b, 0);
-            if (used !== 30) {
-                return Swal.fire("Attenzione", `Devi usare esattamente 30 truppe. Ora ne hai usate ${used}.`, "warning");
+            const total = Object.values(myPlacements).reduce((a, b) => a + b, 0);
+            
+            if (total < MAX_TROOPS) {
+                return Swal.fire("Esercito incompleto", `Hai messo solo ${total} carri armati. Devi arrivare esattamente a 30!`, "warning");
             }
+            
             socket.emit('confirmSetup', { room: currentRoom, placements: myPlacements });
+            Swal.fire("Schierato!", "In attesa degli altri generali...", "success");
         }
 
         function renderPlay(state) {
             const board = document.getElementById('game-board');
             board.innerHTML = "";
             const isMyTurn = state.order[state.turnIndex] === myId;
-            document.getElementById('turn-info').innerText = isMyTurn ? "È IL TUO TURNO!" : "ATTENDI IL NEMICO...";
+            document.getElementById('turn-info').innerText = isMyTurn ? "TOCCA A TE!" : "TURNO DELL'AVVERSARIO";
             document.getElementById('endTurnBtn').style.display = isMyTurn ? 'block' : 'none';
 
-            Object.entries(state.territories).forEach(([name, data]) => {
-                const card = document.createElement('div');
-                card.className = "card";
-                card.style.borderColor = data.owner === myId ? "var(--success)" : "var(--danger)";
-                card.innerHTML = `<div class="troops-badge">${data.troops}</div><div class="card-overlay">${name}</div>`;
-                card.onmouseenter = () => highlightMap(name, true);
-                card.onmouseleave = () => highlightMap(name, false);
-                board.appendChild(card);
+            TERRITORY_LIST.forEach(name => {
+                const data = state.territories[name];
+                if(data) {
+                    const card = document.createElement('div');
+                    card.className = "card";
+                    card.style.backgroundImage = `url('${getImg(name)}')`;
+                    card.style.borderColor = data.owner === myId ? "var(--success)" : "var(--danger)";
+                    card.innerHTML = `<div class="troops-badge">${data.troops}</div><div class="card-overlay">${name}</div>`;
+                    card.onmouseenter = () => highlightMap(name, true);
+                    card.onmouseleave = () => highlightMap(name, false);
+                    board.appendChild(card);
+                }
             });
         }
 
