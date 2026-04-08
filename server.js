@@ -6,16 +6,17 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
+// Elenco sincronizzato esattamente con l'ordine del PDF 
 const ALL_TERRITORIES = [
-    "CASA DI RIKO", "CASA DI ANGELO", "CASA DI SANTE", "BADAWÏ", "CASA DI GIANLUCA",
-    "VIA COSTA", "CLUBHOUSE", "PRESEPE VIVENTE", "CORSO NAZIONALE", "MUNICIPIO",
-    "LA PUPA", "L'AGRUMETO", "LA MANNA DEL POZZO", "CHIESA MADRE", "LIMONAIA",
-    "RODEO", "TERME", "SABBIADORO", "LIDO VERDE", "MONT'ALBANO", "SPEZIALE",
-    "TORRE CANNE", "POZZO FACETO", "SAVELLETRI", "EGNAZIA", "FORCAT Ella",
-    "COCCARO", "MASSERIA TORRE COCCARO", "MASSERIA SAN DOMENICO", "PETTOLECCHIA",
-    "ZOO SAFARI", "SELVA DI FASANO", "LAURETO", "CANALE DI PIRRO", "COREGGIA",
-    "GORGOfreddo", "L'ASSUNTA", "CAPITOLO", "SANTO STEFANO", "MONOPOLI",
-    "POLIGNANO", "CASTELLANA"
+    "CASA DI VANNY", "CICCIO MELONE", "HOTEL MIRAMONTI", "LOCALE DI ANGELO", "VILLA COMUNALE",
+    "LO STRADONE", "PLANET GAMES", "TUTTO PRONTO DA GIANNI (VERDE)", "MINALOCA", "SCANZOSSA",
+    "MC DONALD'S", "MALESANGUE", "PRATI", "SABATELLI MACELLERIA", "ALCHEMICO",
+    "SKIPPER", "PORTO", "MORTIFICATO", "OTTAGONO", "FARO",
+    "IL PUNTO TOSSICO", "TUTTO PRONTO DA GIANNI (GIALLO)", "ZANZARA", "SABBIADORO", "RODEO",
+    "TERME", "LIMONAIA", "CHIESA MADRE", "LA MANNA DEL POZZO", "L'AGRUMETO",
+    "LA PUPA", "EL CHIRINGUITO DA LELLO", "PRESEPE VIVENTE", "CORSO NAZIONALE", "MUNICIPIO",
+    "CASA DI GIANLUCA", "CLUBHOUSE", "VIA COSTA", "BADAWÏ", "CASA DI SANTE",
+    "CASA DI RIKO", "CASA DI ANGELO"
 ];
 
 const OBBIETTIVI = [
@@ -34,7 +35,7 @@ const OBBIETTIVI = [
     "Conquista tutte le case (5) con 10 pedine su ogni casa",
     "Conquista entrambi i territori di Tutto pronto da Gianni con 30 pedine su ogni territorio",
     "Conquista Fasano e Salamina",
-    "Distruggi 2 armate a scelta (eliminando l'ultima pedina della seconda armata)"
+    "Distruggi 2 armate a scelta"
 ];
 
 const IMPREVISTI = [
@@ -62,36 +63,28 @@ io.on('connection', (socket) => {
     socket.on('joinRoom', ({ room, name, color }) => {
         const rID = String(room);
         if (!rooms[rID]) {
-            rooms[rID] = { players: {}, territories: {}, turnIndex: 0, order: [], phase: 'LOBBY', conqueredThisTurn: {}, objectives: {} };
+            rooms[rID] = { players: {}, territories: {}, turnIndex: 0, order: [], phase: 'LOBBY', conqueredThisTurn: {}, objectives: {}, reinforcements: 0 };
         }
-
-        // Controllo colore già preso
         const colorTaken = Object.values(rooms[rID].players).some(p => p.color === color);
-        if (colorTaken) {
-            return socket.emit('errorMsg', "Questo colore è già stato scelto da un altro generale!");
-        }
+        if (colorTaken) return socket.emit('errorMsg', "Colore già occupato!");
 
-        socket.join(rID);
         rooms[rID].players[socket.id] = { id: socket.id, name, color, ready: false };
         rooms[rID].order = Object.keys(rooms[rID].players);
-        
+        socket.join(rID);
         io.to(rID).emit('state', rooms[rID]);
         socket.emit('init', { id: socket.id });
     });
 
     socket.on('startGameRequest', (room) => {
         const r = rooms[room];
-        if (!r || Object.keys(r.players).length < 2) return;
+        if (!r) return;
         r.phase = 'SETUP';
-        
-        // Distribuisci territori e obiettivi
         distributeTerritories(r);
         let shuffledObj = [...OBBIETTIVI].sort(() => Math.random() - 0.5);
         r.order.forEach((pid, idx) => {
             r.objectives[pid] = shuffledObj[idx];
             r.conqueredThisTurn[pid] = false;
         });
-
         io.to(room).emit('state', r);
     });
 
@@ -104,29 +97,46 @@ io.on('connection', (socket) => {
         r.players[socket.id].ready = true;
         if (Object.values(r.players).every(p => p.ready)) {
             r.phase = 'PLAY';
+            calculateReinforcements(r);
         }
         io.to(room).emit('state', r);
     });
 
     socket.on('endTurn', ({ room }) => {
         const r = rooms[room];
-        if (r && r.order[r.turnIndex] === socket.id) {
-            let type = r.conqueredThisTurn[socket.id] ? "IMPREVISTO" : "PROBABILITA";
-            let pool = r.conqueredThisTurn[socket.id] ? IMPREVISTI : PROBABILITA;
-            let text = pool[Math.floor(Math.random() * pool.length)];
-            
-            r.conqueredThisTurn[socket.id] = false; // Reset per prossimo turno
-            io.to(room).emit('cardDrawn', { player: socket.id, type, text });
-            
-            r.turnIndex = (r.turnIndex + 1) % r.order.length;
-            io.to(room).emit('state', r);
-        }
+        if (!r) return;
+        let type = r.conqueredThisTurn[socket.id] ? "IMPREVISTO" : "PROBABILITA";
+        let pool = r.conqueredThisTurn[socket.id] ? IMPREVISTI : PROBABILITA;
+        let text = pool[Math.floor(Math.random() * pool.length)];
+        
+        io.to(room).emit('cardDrawn', { 
+            player: socket.id, 
+            playerName: r.players[socket.id].name,
+            type, 
+            text 
+        });
+    });
+
+    socket.on('confirmCardAndNextTurn', ({ room }) => {
+        const r = rooms[room];
+        if (!r) return;
+        r.conqueredThisTurn[r.order[r.turnIndex]] = false;
+        r.turnIndex = (r.turnIndex + 1) % r.order.length;
+        calculateReinforcements(r);
+        io.to(room).emit('state', r);
+        io.to(room).emit('closeCardSwal');
     });
 
     socket.on('conquestEvent', (room) => {
         if(rooms[room]) rooms[room].conqueredThisTurn[socket.id] = true;
     });
 });
+
+function calculateReinforcements(r) {
+    const nextPlayerId = r.order[r.turnIndex];
+    const territoryCount = Object.values(r.territories).filter(t => t.owner === nextPlayerId).length;
+    r.reinforcements = Math.floor(territoryCount / 3);
+}
 
 function distributeTerritories(r) {
     let shuffled = [...ALL_TERRITORIES].sort(() => Math.random() - 0.5);
