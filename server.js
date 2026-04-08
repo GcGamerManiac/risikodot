@@ -54,6 +54,10 @@ io.on('connection', (socket) => {
         if (!rooms[rID]) {
             rooms[rID] = { players: {}, territories: {}, turnIndex: 0, order: [], phase: 'LOBBY', conqueredThisTurn: {}, objectives: {}, reinforcements: 0 };
         }
+        // Controllo colore
+        if (Object.values(rooms[rID].players).some(p => p.color === color)) {
+            return socket.emit('errorMsg', "Colore già preso!");
+        }
         rooms[rID].players[socket.id] = { id: socket.id, name, color, ready: false };
         rooms[rID].order = Object.keys(rooms[rID].players);
         socket.join(rID);
@@ -81,15 +85,18 @@ io.on('connection', (socket) => {
             if (r.territories[t]) r.territories[t].troops = troops;
         });
         r.players[socket.id].ready = true;
+        
         if (Object.values(r.players).every(p => p.ready)) {
             r.phase = 'PLAY';
             calculateReinforcements(r);
+            io.to(room).emit('allReady'); // Segnala a tutti di chiudere lo swal loading
         }
         io.to(room).emit('state', r);
     });
 
     socket.on('endTurn', ({ room }) => {
         const r = rooms[room];
+        if(!r) return;
         let type = r.conqueredThisTurn[socket.id] ? "IMPREVISTO" : "PROBABILITA";
         let text = (type === "IMPREVISTO" ? IMPREVISTI : PROBABILITA)[Math.floor(Math.random() * 15)];
         io.to(room).emit('cardDrawn', { player: socket.id, playerName: r.players[socket.id].name, type, text });
@@ -97,11 +104,23 @@ io.on('connection', (socket) => {
 
     socket.on('confirmCardAndNextTurn', ({ room }) => {
         const r = rooms[room];
+        if(!r) return;
         r.conqueredThisTurn[socket.id] = false;
         r.turnIndex = (r.turnIndex + 1) % r.order.length;
         calculateReinforcements(r);
         io.to(room).emit('state', r);
         io.to(room).emit('closeCardSwal');
+    });
+
+    // Aggiunta truppe durante il turno (Rinforzi)
+    socket.on('addReinforcements', ({ room, territory, count }) => {
+        const r = rooms[room];
+        if(!r || r.order[r.turnIndex] !== socket.id) return;
+        if(r.reinforcements >= count) {
+            r.territories[territory].troops += count;
+            r.reinforcements -= count;
+            io.to(room).emit('state', r);
+        }
     });
 });
 
